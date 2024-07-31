@@ -2,7 +2,7 @@ import { file, gc, Serve, serve, Server } from "bun";
 import { afterEach, describe, it, expect, afterAll, mock } from "bun:test";
 import { readFileSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
-import { bunExe, bunEnv, dumpStats, isPosix, isIPv6, tmpdirSync, isIPv4 } from "harness";
+import { bunExe, bunEnv, dumpStats, isPosix, isIPv6, tmpdirSync, isIPv4, rejectUnauthorizedScope, tls } from "harness";
 // import { renderToReadableStream } from "react-dom/server";
 // import app_jsx from "./app.jsx";
 import { spawn } from "child_process";
@@ -1562,7 +1562,7 @@ it("should resolve pending promise if requested ended with pending read", async 
     {
       fetch(req) {
         // @ts-ignore
-        req.body?.getReader().read().then(shouldMarkDone).catch(shouldError)
+        req.body?.getReader().read().then(shouldMarkDone).catch(shouldError);
         return new Response("OK");
       },
     },
@@ -1661,7 +1661,7 @@ it("should not instanciate error instances in each request", async () => {
   });
   const batchSize = 100;
   const batch = new Array(batchSize);
-  for(let i = 0; i < 1000; i++) {
+  for (let i = 0; i < 1000; i++) {
     batch[i % batchSize] = await fetch(server.url, {
       method: "POST",
       body: "bun",
@@ -1672,3 +1672,43 @@ it("should not instanciate error instances in each request", async () => {
   }
   expect(heapStats().objectTypeCounts.Error || 0).toBeLessThanOrEqual(startErrorCount);
 });
+
+it("should be able to abort a sendfile response and streams", async () => {
+  const bigfile = join(import.meta.dir, "../../web/encoding/utf8-encoding-fixture.bin");
+  const server = serve({
+    port: 0,
+    tls,
+    hostname: "localhost",
+    async fetch() {
+      return new Response(file(bigfile), {
+        headers: { "Content-Type": "text/html" },
+      });
+    },
+  });
+
+  async function doRequest() {
+    const controller = new AbortController();
+    const res = await fetch(server.url, {
+      signal: controller.signal,
+      tls: { ca: tls.cert },
+    });
+    res.body
+      ?.getReader()
+      .read()
+      .catch(() => {});
+    controller.abort();
+  }
+  const batchSize = 20;
+  const batch = [];
+
+  for (let i = 0; i < 500; i++) {
+    batch.push(doRequest());
+    if (batch.length === batchSize) {
+      await Promise.all(batch);
+      batch.length = 0;
+    }
+  }
+  await Promise.all(batch);
+  // server.stop(true);
+  expect().pass();
+}, 10_000);
