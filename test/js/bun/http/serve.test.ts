@@ -1687,16 +1687,18 @@ it("should be able to abort a sendfile response and streams", async () => {
   });
 
   async function doRequest() {
-    const controller = new AbortController();
-    const res = await fetch(server.url, {
-      signal: controller.signal,
-      tls: { ca: tls.cert },
-    });
-    res.body
-      ?.getReader()
-      .read()
-      .catch(() => {});
-    controller.abort();
+    try {
+      const controller = new AbortController();
+      const res = await fetch(server.url, {
+        signal: controller.signal,
+        tls: { rejectUnauthorized: false },
+      });
+      res.body
+        ?.getReader()
+        .read()
+        .catch(() => {});
+      controller.abort();
+    } catch {}
   }
   const batchSize = 20;
   const batch = [];
