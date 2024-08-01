@@ -1675,7 +1675,7 @@ it("should not instanciate error instances in each request", async () => {
 
 it("should be able to abort a sendfile response and streams", async () => {
   const bigfile = join(import.meta.dir, "../../web/encoding/utf8-encoding-fixture.bin");
-  const server = serve({
+  using server = serve({
     port: 0,
     tls,
     hostname: "localhost",
@@ -1709,6 +1709,5 @@ it("should be able to abort a sendfile response and streams", async () => {
     }
   }
   await Promise.all(batch);
-  // server.stop(true);
   expect().pass();
 }, 10_000);
